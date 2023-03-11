@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	yaml "gopkg.in/yaml.v3"
@@ -18,10 +19,11 @@ type Config struct {
 }
 
 type Rule struct {
-	Name    string `yaml:"name"`
-	Match   string `yaml:"match"`
-	Command string `yaml:"command"`
-	Skip    bool   `yaml:"skip"`
+	Name     string `yaml:"name"`
+	Contains string `yaml:"contains"`
+	Match    string `yaml:"match"`
+	Command  string `yaml:"command"`
+	Skip     bool   `yaml:"skip"`
 }
 
 func main() {
@@ -32,29 +34,30 @@ func main() {
 
 	for scanner.Scan() {
 		logline := scanner.Text()
-		ok := handleLine(logline, config.Rules)
-		if ok {
-			fmt.Printf("%s\n", logline)
-		}
+		handleLine(logline, config.Rules)
 	}
 }
 
-func handleLine(line string, rules []Rule) bool {
+func handleLine(line string, rules []Rule) {
 	// Skip empty lines
 	if len(line) == 0 {
-		return false
+		return
 	}
 
 	for _, r := range rules {
-		if strings.Contains(line, r.Match) {
-			if r.Skip {
-				return false
+		if len(r.Contains) > 0 {
+			if strings.Contains(line, r.Contains) {
+				runHook(r, line)
 			}
-			runHook(r.Command, line)
+		}
+		if len(r.Match) > 0 {
+			reg := regexp.MustCompile(r.Match)
+			match := reg.FindString(line)
+			if len(match) > 0 {
+				runHook(r, match)
+			}
 		}
 	}
-
-	return true
 }
 
 func readConfig(config string) Config {
@@ -75,8 +78,12 @@ func readConfig(config string) Config {
 	return c
 }
 
-func runHook(cmdFormat string, logline string) {
-	cmd := fmt.Sprintf(cmdFormat, logline)
+func runHook(r Rule, logline string) {
+	if !r.Skip {
+		fmt.Printf("%s\n", logline)
+	}
+	cmd := fmt.Sprintf(r.Command, logline)
+
 	process := exec.Command("/bin/bash", "-c", cmd)
 	if err := process.Run(); err != nil {
 		log.Fatal(err)

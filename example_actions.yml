@@ -1,8 +1,11 @@
 ---
 rules:
   - name: test
-    match: test
+    contains: test
     command: echo %s >> matches.log
   - name: nope
-    match: nope
+    contains: nope
     skip: true
+  - name: login
+    contains: Got character ZDOID from
+    command: l='%s'; l=${l//*ZDOID from /}; l=${l// :*/}; msg="Player $l spawned into the world"; echo $msg >> login.log
