@@ -1,0 +1,8 @@
+---
+rules:
+  - name: test
+    match: test
+    command: echo %s >> matches.log
+  - name: nope
+    match: nope
+    skip: true
