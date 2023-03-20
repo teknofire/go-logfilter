@@ -4,13 +4,12 @@ import (
 	"bufio"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
-
+	"github.com/sirupsen/logrus"
 	yaml "gopkg.in/yaml.v3"
 )
 
@@ -47,17 +46,23 @@ func handleLine(line string, rules []Rule) {
 	for _, r := range rules {
 		if len(r.Contains) > 0 {
 			if strings.Contains(line, r.Contains) {
+				logrus.Debug("contains rule: ", r.Contains)
 				runHook(r, line)
+				return 
 			}
 		}
 		if len(r.Match) > 0 {
 			reg := regexp.MustCompile(r.Match)
 			match := reg.FindString(line)
 			if len(match) > 0 {
+				logrus.Debug("match rule: ", r.Match)
 				runHook(r, match)
+				return
 			}
 		}
 	}
+	logrus.Info(line)
+	
 }
 
 func readConfig(config string) Config {
@@ -78,14 +83,23 @@ func readConfig(config string) Config {
 	return c
 }
 
-func runHook(r Rule, logline string) {
-	if !r.Skip {
-		fmt.Printf("%s\n", logline)
+func runHook(r Rule, logline string) error {
+	if r.Skip || len(r.Command) == 0 {
+		return nil
 	}
-	cmd := fmt.Sprintf(r.Command, logline)
+	
+	var cmd string
+	if strings.Count(r.Command, "%s") > 0 {
+		cmd = fmt.Sprintf(r.Command, logline)
+	} else {
+		cmd = r.Command
+	}
 
 	process := exec.Command("/bin/bash", "-c", cmd)
 	if err := process.Run(); err != nil {
-		log.Fatal(err)
+		logrus.WithError(err).Error("Error processing command: ", cmd)
+		return err
 	}
+
+	return nil
 }
